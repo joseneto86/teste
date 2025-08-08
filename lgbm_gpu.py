@@ -33,8 +33,11 @@ def engenharia_de_dados(df,colunas_para_engenharia):
     df['std_roi_5'] = roi.rolling(window=10).std().fillna(0)
 
     # Limpeza de inf e NaN restantes
-    df = df.replace([cp.inf, -cp.inf], 0)
-    df = df.fillna(0)
+    # Converter para pandas temporariamente para limpeza
+    df_pandas = df.to_pandas()
+    df_pandas = df_pandas.replace([np.inf, -np.inf], 0)
+    df_pandas = df_pandas.fillna(0)
+    df = cudf.from_pandas(df_pandas)
 
     return df
 
@@ -162,7 +165,11 @@ print(f'📊 Configurações:')
 print(f'   - Dados de validação: {DADOS_VALIDACAO}')
 print(f'   - Window size: {WINDOW_SIZE}')
 print(f'   - Threshold: {THRESHOLD_DE_DECISAO}')
-print(f'   - GPU: {cp.cuda.Device(0).name if cp.cuda.is_available() else "N/A"}')
+try:
+    gpu_name = cp.cuda.Device(0).name if cp.cuda.is_available() else "N/A"
+except:
+    gpu_name = "N/A"
+print(f'   - GPU: {gpu_name}')
 print('=' * 50)
 print('Acertos:')
 print(f'- Classe 0 (Não ganhou): {acertos_0} de {total - (acertos_1 + erros_0)}')
