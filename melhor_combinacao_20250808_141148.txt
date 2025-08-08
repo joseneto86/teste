@@ -1,0 +1,13 @@
+Melhor Combinação ID: 1
+Precisão: 0.5000
+Acurácia: 0.3600
+F1-Score: 0.1111
+Parâmetros:
+  n_estimators: 200
+  max_depth: 6
+  learning_rate: 0.1
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_samples: 20
+  reg_alpha: 0
+  reg_lambda: 0

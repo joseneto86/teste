@@ -136,7 +136,7 @@ def main():
     
     # Definindo hiperparâmetros para testar
     hiperparametros = {
-        'n_estimators': [200,300,500],
+        'n_estimators': [300,500],
         'max_depth': [6],
         'learning_rate': [0.1],
         'subsample': [0.8],
