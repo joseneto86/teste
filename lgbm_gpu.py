@@ -26,13 +26,17 @@ def engenharia_de_dados(df,colunas_para_engenharia):
         df[f'{nome_da_feature}_ROC5'] = (df[nome_da_feature] - df[nome_da_feature].shift(5)) / df[nome_da_feature].shift(5)
 
     # ROI protegido contra divisão por zero
-    roi = cp.where(df['valorApostado'] > 0, df['valorGanho'] / df['valorApostado'], 0)
+    # Converter para arrays cupy para processamento
+    valor_apostado = cp.array(df['valorApostado'].values)
+    valor_ganho = cp.array(df['valorGanho'].values)
+    
+    roi = cp.where(valor_apostado > 0, valor_ganho / valor_apostado, 0)
     roi_series = pd.Series(cp.asnumpy(roi), index=df.index)
     df['media_roi_5'] = roi_series.rolling(window=10).mean().fillna(0)
     df['std_roi_5'] = roi_series.rolling(window=10).std().fillna(0)
 
     # Limpeza de inf e NaN restantes
-    df.replace([cp.inf, -cp.inf], 0, inplace=True)
+    df.replace([np.inf, -np.inf], 0, inplace=True)
     df.fillna(0, inplace=True)
 
     return df
