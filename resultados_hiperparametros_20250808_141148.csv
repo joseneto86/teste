@@ -1,4 +1,0 @@
-combinacao_id,acuracia,f1_score,precisao,params_str
-1,0.36,0.1111111111111111,0.5,"{'n_estimators': 200, 'max_depth': 6, 'learning_rate': 0.1, 'subsample': 0.8, 'colsample_bytree': 0.8, 'min_child_samples': 20, 'reg_alpha': 0, 'reg_lambda': 0}"
-2,0.36,0.2,0.5,"{'n_estimators': 300, 'max_depth': 6, 'learning_rate': 0.1, 'subsample': 0.8, 'colsample_bytree': 0.8, 'min_child_samples': 20, 'reg_alpha': 0, 'reg_lambda': 0}"
-3,0.36,0.2,0.5,"{'n_estimators': 500, 'max_depth': 6, 'learning_rate': 0.1, 'subsample': 0.8, 'colsample_bytree': 0.8, 'min_child_samples': 20, 'reg_alpha': 0, 'reg_lambda': 0}"

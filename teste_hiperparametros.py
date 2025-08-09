@@ -115,9 +115,74 @@ def simular_backtest(model, df_treino, df_teste, window_size, threshold=0.7):
         'resultados_detalhados': resultados_df
     }
 
+def carregar_combinacoes_testadas():
+    """Carrega combinações já testadas do arquivo resultados_hiperparametros.csv"""
+    combinacoes_testadas = set()
+    try:
+        # Procurar por arquivos CSV existentes
+        import glob
+        arquivos_csv = glob.glob('resultados_hiperparametros_*.csv')
+        
+        if not arquivos_csv:
+            print("📝 Nenhum arquivo resultados_hiperparametros_*.csv encontrado. Iniciando do zero.")
+            return combinacoes_testadas
+        
+        # Usar o arquivo mais recente
+        arquivo_mais_recente = max(arquivos_csv, key=lambda x: x.split('_')[1].split('.')[0])
+        print(f"📖 Carregando combinações do arquivo: {arquivo_mais_recente}")
+        
+        df_existente = pd.read_csv(arquivo_mais_recente)
+        
+        # Extrair parâmetros da coluna params_str
+        for idx, row in df_existente.iterrows():
+            params_str = row['params_str']
+            # Converter string de parâmetros de volta para dicionário
+            try:
+                # Remover caracteres especiais e converter para dicionário
+                params_str_clean = params_str.replace("'", '"')
+                import ast
+                params_dict = ast.literal_eval(params_str_clean)
+                combinacoes_testadas.add(str(params_dict))
+            except:
+                print(f"⚠️  Erro ao processar parâmetros da linha {idx}")
+                continue
+                
+    except Exception as e:
+        print(f"⚠️  Erro ao carregar combinações testadas: {e}")
+    
+    print(f"📊 Carregadas {len(combinacoes_testadas)} combinações únicas")
+    return combinacoes_testadas
+
+def salvar_combinacao_testada(combinacao_id, params, acuracia, f1_score, precisao, df_resultados):
+    """Salva a combinação testada no arquivo CSV"""
+    # Criar nova linha para o DataFrame
+    nova_linha = {
+        'combinacao_id': combinacao_id,
+        'acuracia': acuracia,
+        'f1_score': f1_score,
+        'precisao': precisao,
+        'params_str': str(params)
+    }
+    
+    # Adicionar ao DataFrame
+    df_resultados = pd.concat([df_resultados, pd.DataFrame([nova_linha])], ignore_index=True)
+    
+    # Salvar no arquivo CSV
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f'resultados_hiperparametros.csv'
+    df_resultados.to_csv(filename, index=False)
+    
+    print(f"💾 Combinação #{combinacao_id} salva em: {filename}")
+    return df_resultados
+
 def main():
     print("🚀 INICIANDO TESTE DE HIPERPARÂMETROS LIGHTGBM")
     print("=" * 70)
+    
+    # Carregando combinações já testadas
+    print("📖 Verificando combinações já testadas...")
+    combinacoes_testadas = carregar_combinacoes_testadas()
+    print(f"✅ Encontradas {len(combinacoes_testadas)} combinações já testadas")
     
     # Carregando dados
     print("📊 Carregando dados...")
@@ -131,33 +196,24 @@ def main():
     
     # Configurações
     DADOS_VALIDACAO = 25
-    THRESHOLD_DE_DECISAO = 0.70
+    THRESHOLD_DE_DECISAO = 0.60
     WINDOW_SIZE = 400  # Usando o melhor window_size encontrado anteriormente
     
     # Definindo hiperparâmetros para testar
+   
+    
     hiperparametros = {
-        'n_estimators': [300,500],
-        'max_depth': [6],
-        'learning_rate': [0.1],
-        'subsample': [0.8],
-        'colsample_bytree': [0.8],
-        'min_child_samples': [20],
-        'reg_alpha': [0],
-        'reg_lambda': [0]
-    }
-    '''
-    hiperparametros = {
-        'n_estimators': [200],
-        'max_depth': [3, 6, 9],
-        'learning_rate': [0.05, 0.1, 0.2],
-        'subsample': [0.7, 0.8, 0.9],
+        'n_estimators': [100,200,300],
+        'max_depth': [6, 9],
+        'learning_rate': [0.1, 0.2],
+        'subsample': [0.8, 0.9, 1],
         'colsample_bytree': [0.7, 0.8, 0.9],
-        'min_child_samples': [10, 20, 50],
-        'reg_alpha': [0, 0.1, 0.5],
-        'reg_lambda': [0, 0.1, 0.5]
+        'min_child_samples': [20, 50],
+        'reg_alpha': [0.1, 0.5, 1],
+        'reg_lambda': [0.1, 0.5, 1]
     }
 
-    
+    '''
      LGBMClassifier(
     n_estimators=100,
     max_depth=6,
@@ -183,6 +239,7 @@ def main():
     
     # Armazenando resultados
     resultados_hiperparametros = []
+    df_resultados_atual = pd.DataFrame(columns=['combinacao_id', 'acuracia', 'f1_score', 'precisao', 'params_str'])
     
     # Barra de progresso principal para combinações
     pbar_combinacoes = tqdm(combinacoes, desc="Testando combinações", position=0)
@@ -190,6 +247,14 @@ def main():
     for i, combinacao in enumerate(pbar_combinacoes):
         # Criando dicionário de parâmetros
         params = dict(zip(param_names, combinacao))
+        
+        # Verificar se esta combinação já foi testada
+        params_str = str(params)
+        if params_str in combinacoes_testadas:
+            print(f"\n⏭️  Combinação #{i+1} já testada anteriormente. Pulando...")
+            continue
+        
+        print(f"\n🧪 Testando combinação #{i+1}...")
         
         # Criando modelo com os parâmetros atuais
         model = LGBMClassifier(
@@ -269,6 +334,12 @@ def main():
         
         resultados_hiperparametros.append(resultado)
         
+        # Salvar combinação testada no arquivo CSV
+        df_resultados_atual = salvar_combinacao_testada(i+1, params, acuracia, f1, precisao, df_resultados_atual)
+        
+        # Adicionar à lista de combinações testadas
+        combinacoes_testadas.add(params_str)
+        
         # Atualizando descrição da barra de progresso
         pbar_combinacoes.set_postfix({
             'Precisão': f"{precisao:.4f}",
@@ -277,6 +348,16 @@ def main():
         })
     
     pbar_combinacoes.close()
+    
+    # Estatísticas do teste
+    total_combinacoes = len(combinacoes)
+    combinacoes_testadas_nova_execucao = len(resultados_hiperparametros)
+    combinacoes_puladas = total_combinacoes - combinacoes_testadas_nova_execucao
+    
+    print(f"\n📈 ESTATÍSTICAS DA EXECUÇÃO:")
+    print(f"   - Total de combinações: {total_combinacoes}")
+    print(f"   - Combinações testadas nesta execução: {combinacoes_testadas_nova_execucao}")
+    print(f"   - Combinações puladas (já testadas): {combinacoes_puladas}")
     
     # Análise dos resultados
     print("\n" + "=" * 70)
@@ -315,9 +396,9 @@ def main():
     print(f"   F1-Score: {melhor_combinacao['f1_score']:.4f}")
     print(f"   Parâmetros: {melhor_combinacao['params']}")
     
-    # Salvando resultados
+    # Salvando resultados finais
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    filename = f'resultados_hiperparametros_{timestamp}.csv'
+    filename = f'resultados_hiperparametros_final_{timestamp}.csv'
     
     # Preparando dados para salvar
     df_salvar = df_resultados.copy()
@@ -325,7 +406,7 @@ def main():
     df_salvar = df_salvar.drop('params', axis=1)
     
     df_salvar.to_csv(filename, index=False)
-    print(f"\n💾 Resultados salvos em: {filename}")
+    print(f"\n💾 Resultados finais salvos em: {filename}")
     
     # Salvando melhor combinação separadamente
     melhor_params = melhor_combinacao['params']
