@@ -1,7 +1,8 @@
 import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix, precision_score
 from tqdm import tqdm
-import numpy as np
+import cupy as cp  # Usando cupy em vez de numpy
+import numpy as np  # Mantendo para compatibilidade com sklearn
 import warnings
 from lightgbm import LGBMClassifier
 
@@ -14,7 +15,7 @@ def get_data_train(window_size, df, features, target):
         window = features.iloc[i-window_size:i].values.flatten()
         y.append(target.iloc[i])
         X.append(window)
-    return np.array(X), np.array(y)
+    return cp.array(X), cp.array(y)
 
 def engenharia_de_dados(df,colunas_para_engenharia):
 
@@ -25,13 +26,13 @@ def engenharia_de_dados(df,colunas_para_engenharia):
         df[f'{nome_da_feature}_ROC5'] = (df[nome_da_feature] - df[nome_da_feature].shift(5)) / df[nome_da_feature].shift(5)
 
     # ROI protegido contra divisão por zero
-    roi = np.where(df['valorApostado'] > 0, df['valorGanho'] / df['valorApostado'], 0)
-    roi_series = pd.Series(roi, index=df.index)
+    roi = cp.where(df['valorApostado'] > 0, df['valorGanho'] / df['valorApostado'], 0)
+    roi_series = pd.Series(cp.asnumpy(roi), index=df.index)
     df['media_roi_5'] = roi_series.rolling(window=10).mean().fillna(0)
     df['std_roi_5'] = roi_series.rolling(window=10).std().fillna(0)
 
     # Limpeza de inf e NaN restantes
-    df.replace([np.inf, -np.inf], 0, inplace=True)
+    df.replace([cp.inf, -cp.inf], 0, inplace=True)
     df.fillna(0, inplace=True)
 
     return df
@@ -57,8 +58,8 @@ THRESHOLD_DE_DECISAO = 0.70 # NOSSO NOVO PARÂMETRO!
 WINDOW_SIZE = 400
 
 
-# LGBMClassifier
-print("🤖 Configurando LightGBM...")
+# LGBMClassifier configurado para GPU
+print("🤖 Configurando LightGBM para GPU...")
 model = LGBMClassifier(
     n_estimators=100,
     max_depth=6,
@@ -68,24 +69,32 @@ model = LGBMClassifier(
     random_state=42,
     eval_metric='logloss',
     use_label_encoder=False,
-    verbose=-1
+    verbose=-1,
+    # Configurações para GPU
+    device='gpu',
+    gpu_platform_id=0,
+    gpu_device_id=0
 )
-print("✅ LightGBM configurado")
+print("✅ LightGBM configurado para GPU")
 
 # --- SIMULAÇÃO ---
 print(f"🎯 Iniciando simulação com {DADOS_VALIDACAO} dados de validação...")
 janela_dados_treino = df_passado.copy()
 df_teste = df_futuro.head(DADOS_VALIDACAO)
 resultados = []
-for i in tqdm(range(len(df_teste)), desc="Testando modelo LGBMClassifier"):
+for i in tqdm(range(len(df_teste)), desc="Testando modelo LGBMClassifier com GPU"):
   historico_recente = janela_dados_treino.tail(DADOS_RECENTES_PARA_TREINO)
-  features_atuais = historico_recente.select_dtypes(include=np.number).drop(columns=['result','mes', 'dia_da_semana', 'is_fim_de_semana'], errors='ignore')
+  features_atuais = historico_recente.select_dtypes(include=[cp.number, np.number]).drop(columns=['result','mes', 'dia_da_semana', 'is_fim_de_semana'], errors='ignore')
   target_atuais = historico_recente['result']
   X_treino, y_treino = get_data_train(WINDOW_SIZE, historico_recente, features_atuais, target_atuais)
 
   if len(X_treino) > 0:
+    # Converter para CPU para o LightGBM (que não suporta cuPy diretamente)
+    X_treino_cpu = cp.asnumpy(X_treino)
+    y_treino_cpu = cp.asnumpy(y_treino)
+    
     # Treinar modelo
-    model.fit(X_treino, y_treino)
+    model.fit(X_treino_cpu, y_treino_cpu)
     ultima_janela = features_atuais.iloc[-WINDOW_SIZE:].values.flatten().reshape(1, -1)
 
     # --- LÓGICA DE PREVISÃO MODIFICADA ---
@@ -122,7 +131,7 @@ for i in tqdm(range(len(df_teste)), desc="Testando modelo LGBMClassifier"):
 # --- AVALIAÇÃO ---
 # O restante do código de avaliação permanece o mesmo
 resultados_df = pd.DataFrame(resultados)
-resultados_df.to_csv('resultados_lgbm_com_threshold.csv', index=False)
+resultados_df.to_csv('resultados_lgbm_gpu_com_threshold.csv', index=False)
 acuracia = accuracy_score(resultados_df['valor_real'], resultados_df['valor_previsto'])
 precisao = precision_score(resultados_df['valor_real'], resultados_df['valor_previsto'], zero_division=0)
 cm = confusion_matrix(resultados_df['valor_real'], resultados_df['valor_previsto'])
@@ -146,12 +155,17 @@ elif len(np.unique(resultados_df['valor_previsto'])) == 1:
 total = len(resultados_df)
 
 print('\n' + '=' * 50)
-print('🚀 RESULTADOS DO TESTE LIGHTGBM')
+print('🚀 RESULTADOS DO TESTE LIGHTGBM COM GPU')
 print('=' * 50)
 print(f'📊 Configurações:')
 print(f'   - Dados de validação: {DADOS_VALIDACAO}')
 print(f'   - Window size: {WINDOW_SIZE}')
 print(f'   - Threshold: {THRESHOLD_DE_DECISAO}')
+try:
+    gpu_name = cp.cuda.Device(0).name if cp.cuda.is_available() else "N/A"
+except:
+    gpu_name = "N/A"
+print(f'   - GPU: {gpu_name}')
 print('=' * 50)
 print('Acertos:')
 print(f'- Classe 0 (Não ganhou): {acertos_0} de {total - (acertos_1 + erros_0)}')
