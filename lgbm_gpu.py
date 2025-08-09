@@ -62,24 +62,59 @@ THRESHOLD_DE_DECISAO = 0.70 # NOSSO NOVO PARÂMETRO!
 WINDOW_SIZE = 400
 
 
-# LGBMClassifier configurado para GPU
-print("🤖 Configurando LightGBM para GPU...")
-model = LGBMClassifier(
-    n_estimators=100,
-    max_depth=6,
-    learning_rate=0.1,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    random_state=42,
-    eval_metric='logloss',
-    use_label_encoder=False,
-    verbose=-1,
-    # Configurações para GPU
-    device='gpu',
-    gpu_platform_id=0,
-    gpu_device_id=0
-)
-print("✅ LightGBM configurado para GPU")
+# LGBMClassifier com tentativa de GPU
+print("🤖 Configurando LightGBM...")
+try:
+    # Tentar CUDA primeiro
+    model = LGBMClassifier(
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        eval_metric='logloss',
+        use_label_encoder=False,
+        verbose=-1,
+        device='cuda',
+        gpu_device_id=0
+    )
+    print("✅ LightGBM configurado para GPU (CUDA)")
+    gpu_enabled = True
+except:
+    try:
+        # Fallback para OpenCL
+        model = LGBMClassifier(
+            n_estimators=100,
+            max_depth=6,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            eval_metric='logloss',
+            use_label_encoder=False,
+            verbose=-1,
+            device='gpu',
+            gpu_platform_id=0,
+            gpu_device_id=0
+        )
+        print("✅ LightGBM configurado para GPU (OpenCL)")
+        gpu_enabled = True
+    except:
+        # Fallback para CPU
+        model = LGBMClassifier(
+            n_estimators=100,
+            max_depth=6,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            eval_metric='logloss',
+            use_label_encoder=False,
+            verbose=-1
+        )
+        print("⚠️ GPU não disponível. LightGBM configurado para CPU")
+        gpu_enabled = False
 
 # --- SIMULAÇÃO ---
 print(f"🎯 Iniciando simulação com {DADOS_VALIDACAO} dados de validação...")
@@ -167,9 +202,10 @@ print(f'   - Window size: {WINDOW_SIZE}')
 print(f'   - Threshold: {THRESHOLD_DE_DECISAO}')
 try:
     gpu_name = cp.cuda.Device(0).name if cp.cuda.is_available() else "N/A"
+    gpu_status = f"{gpu_name} ({'Habilitada' if gpu_enabled else 'CPU fallback'})"
 except:
-    gpu_name = "N/A"
-print(f'   - GPU: {gpu_name}')
+    gpu_status = "CPU fallback"
+print(f'   - GPU: {gpu_status}')
 print('=' * 50)
 print('Acertos:')
 print(f'- Classe 0 (Não ganhou): {acertos_0} de {total - (acertos_1 + erros_0)}')
