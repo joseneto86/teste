@@ -65,7 +65,7 @@ WINDOW_SIZE = 400
 # LGBMClassifier com tentativa de GPU
 print("🤖 Configurando LightGBM...")
 try:
-    # Tentar CUDA primeiro
+    # Tentar OpenCL/GPU primeiro
     model = LGBMClassifier(
         n_estimators=100,
         max_depth=6,
@@ -76,45 +76,28 @@ try:
         eval_metric='logloss',
         use_label_encoder=False,
         verbose=-1,
-        device='cuda',
+        device='gpu',
+        gpu_platform_id=0,
         gpu_device_id=0
     )
-    print("✅ LightGBM configurado para GPU (CUDA)")
+    print("✅ LightGBM configurado para GPU (OpenCL)")
     gpu_enabled = True
-except:
-    try:
-        # Fallback para OpenCL
-        model = LGBMClassifier(
-            n_estimators=100,
-            max_depth=6,
-            learning_rate=0.1,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42,
-            eval_metric='logloss',
-            use_label_encoder=False,
-            verbose=-1,
-            device='gpu',
-            gpu_platform_id=0,
-            gpu_device_id=0
-        )
-        print("✅ LightGBM configurado para GPU (OpenCL)")
-        gpu_enabled = True
-    except:
-        # Fallback para CPU
-        model = LGBMClassifier(
-            n_estimators=100,
-            max_depth=6,
-            learning_rate=0.1,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42,
-            eval_metric='logloss',
-            use_label_encoder=False,
-            verbose=-1
-        )
-        print("⚠️ GPU não disponível. LightGBM configurado para CPU")
-        gpu_enabled = False
+except Exception as e:
+    print(f"⚠️ Erro na configuração GPU: {str(e)[:100]}...")
+    # Fallback para CPU
+    model = LGBMClassifier(
+        n_estimators=100,
+        max_depth=6,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        eval_metric='logloss',
+        use_label_encoder=False,
+        verbose=-1
+    )
+    print("✅ LightGBM configurado para CPU")
+    gpu_enabled = False
 
 # --- SIMULAÇÃO ---
 print(f"🎯 Iniciando simulação com {DADOS_VALIDACAO} dados de validação...")
